@@ -1,0 +1,10 @@
+# Folder dependensi
+node_modules/
+
+# Folder hasil build
+dist/
+
+# File log NPM
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
