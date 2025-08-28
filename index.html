@@ -4101,22 +4101,41 @@ async function handleAiSummaryGeneration() {
                 nipInput.readOnly = false;
             }, 0);
         });
-// Tambahkan ini di akhir blok <script> Anda
-dashboardFilterSatker.addEventListener('change', renderDashboard);
-dashboardFilterTahap.addEventListener('change', renderDashboard);
-btnGenerateSummary.addEventListener('click', handleAiSummaryGeneration);
-    </script>
-
-    <!-- Notifikasi Update untuk index.html -->
-    <div id="notification" class="modal" style="display: none; z-index: 2000;">
-        ... (seluruh isi div notifikasi) ...
+<!-- Notifikasi Update untuk index.html -->
+<div id="notification" class="modal" style="display: none; z-index: 2000;">
+    <div class="modal-content bg-white w-11/12 md:max-w-md mx-auto rounded-lg shadow-xl p-8 text-center">
+        <h2 id="notification-title" class="text-xl font-bold mb-4">Pembaruan Tersedia</h2>
+        <p id="notification-message" class="text-gray-600 mb-6">Versi baru telah diunduh. Mulai ulang aplikasi untuk menerapkan pembaruan.</p>
+        <div class="flex justify-center space-x-4">
+            <button id="close-notification" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Nanti</button>
+            <button id="restart-app" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Mulai Ulang Sekarang</button>
+        </div>
     </div>
+</div>
 
-    <script>
-        // Tambahkan script ini di bagian bawah file index.html Anda, sebelum tag </body> penutup
-        const notification = document.getElementById('notification');
-        ... (seluruh isi script notifikasi) ...
-    </script>
+<script>
+    const notification = document.getElementById('notification');
+    const closeButton = document.getElementById('close-notification');
+    const restartButton = document.getElementById('restart-app');
+
+    if (window.electronAPI) {
+        window.electronAPI.onUpdateAvailable(() => {
+            console.log('Pembaruan tersedia, sedang mengunduh...');
+        });
+
+        window.electronAPI.onUpdateDownloaded(() => {
+            notification.style.display = 'flex';
+        });
+
+        closeButton.addEventListener('click', () => {
+            notification.style.display = 'none';
+        });
+
+        restartButton.addEventListener('click', () => {
+            window.electronAPI.restartApp();
+        });
+    }
+</script>
 
 </body>
 </html>
