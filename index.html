@@ -1082,7 +1082,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showLoading('Memverifikasi...');
 
             try {
-                // PERBAIKAN: Mengubah metode menjadi POST untuk mengatasi masalah CORS
                 const payload = {
                     action: 'checkLogin',
                     username: username,
@@ -1091,29 +1090,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const response = await fetch(GAS_URL, {
                     method: 'POST',
-                    // Menggunakan text/plain adalah praktik umum untuk menghindari pre-flight request yang rumit dengan Apps Script
-                    headers: {
-                        'Content-Type': 'text/plain;charset=utf-8', 
-                    },
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
                     body: JSON.stringify(payload),
-                    redirect: 'follow' // Menambahkan ini untuk keamanan ekstra
+                    redirect: 'follow'
                 });
-                // AKHIR PERBAIKAN
-
+                
                 const result = await response.json();
 
                 if (result.status === 'success') {
                     loggedInUser = { username: result.username, nip: result.nip, nama: result.nama };
-                    document.getElementById('welcome-title').textContent = `Selamat Datang Bapak/Ibu ${result.nama}`;
 
-                    loginModal.style.display = 'none';
-                    welcomeModal.style.display = 'flex';
-                    
-                    await Promise.all([
-                        loadAuditList(),
-                        loadSatuanKerjaList(),
-                        loadUsersList() 
-                    ]);
+                    // --- PERBAIKAN UTAMA: Percabangan Alur Berdasarkan Peran ---
+                    if (loggedInUser.username.toLowerCase() === 'inspektur') {
+                        // Alur untuk Inspektur: Langsung ke Dashboard Global
+                        loginModal.style.display = 'none';
+                        await fetchAllAuditsDataAndRenderDashboard(); // Muat semua data audit
+                        currentUserRole = 'Inspektur'; // Tetapkan peran secara manual
+                        applyRoleRestrictions(currentUserRole);
+                        startApp();
+                        showMenu('menu-dashboard', document.querySelector('[data-menu="menu-dashboard"]'));
+                    } else {
+                        // Alur untuk Tim Audit (tetap seperti semula)
+                        document.getElementById('welcome-title').textContent = `Selamat Datang Bapak/Ibu ${result.nama}`;
+                        loginModal.style.display = 'none';
+                        welcomeModal.style.display = 'flex';
+                        
+                        await Promise.all([
+                            loadAuditList(),
+                            loadSatuanKerjaList(),
+                            loadUsersList() 
+                        ]);
+                    }
+                    // --- AKHIR PERBAIKAN ---
 
                 } else {
                     loginError.textContent = result.message || 'Login gagal.';
@@ -1404,58 +1412,63 @@ async function handleNewAudit() {
 }
 
 function applyRoleRestrictions(role) {
-    const managerRoles = ['Ketua Tim', 'Pengendali Teknis', 'Pengendali Mutu', 'Penanggung Jawab', 'Admin'];
+            const managerRoles = ['Ketua Tim', 'Pengendali Teknis', 'Pengendali Mutu', 'Penanggung Jawab', 'Admin'];
+            const mainSaveButton = document.querySelector('button[onclick="saveCurrentState(false)"]');
 
-    // Selalu tampilkan semua menu terlebih dahulu, lalu sembunyikan yang tidak perlu
-    menuItems.forEach(item => item.parentElement.style.display = 'block');
-    document.getElementById('new-audit-section').style.display = 'block';
+            // Tampilkan semua menu dan tombol secara default
+            menuItems.forEach(item => item.parentElement.style.display = 'block');
+            document.getElementById('new-audit-section').style.display = 'block';
+            mainSaveButton.style.display = 'flex'; // Tampilkan tombol simpan utama
 
-    // Atur tampilan filter default
-    document.getElementById('filter-section-menu4').style.display = 'block';
-    document.getElementById('nip-input-container-4').style.display = 'block';
-    document.getElementById('anggota-selector-container').style.display = 'none';
+            // Atur tampilan filter default
+            document.getElementById('filter-section-menu4').style.display = 'block';
+            document.getElementById('nip-input-container-4').style.display = 'block';
+            document.getElementById('anggota-selector-container').style.display = 'none';
+            document.getElementById('filter-section-menu5').style.display = 'block';
+            document.getElementById('nip-input-container-5').style.display = 'flex';
+            document.getElementById('anggota-selector-container-notisi').style.display = 'none';
+            
+            // Aktifkan filter dashboard secara default
+            dashboardFilterSatker.disabled = false;
+            dashboardFilterTahap.disabled = false;
 
-    document.getElementById('filter-section-menu5').style.display = 'block';
-    document.getElementById('nip-input-container-5').style.display = 'flex';
-    document.getElementById('anggota-selector-container-notisi').style.display = 'none';
+            if (role === 'Anggota') {
+                document.querySelector('[data-menu="menu1"]').parentElement.style.display = 'none';
+                document.querySelector('[data-menu="menu2"]').parentElement.style.display = 'none';
+                document.querySelector('[data-menu="menu3"]').parentElement.style.display = 'none';
+                document.querySelector('[data-menu="menu6"]').parentElement.style.display = 'none';
+                document.getElementById('new-audit-section').style.display = 'none';
+                document.getElementById('filter-section-menu4').style.display = 'none';
+                document.getElementById('filter-section-menu5').style.display = 'none';
+                showMenu('menu4', document.querySelector('[data-menu="menu4"]'));
 
-    if (role === 'Anggota') {
-        // Sembunyikan menu yang tidak relevan untuk Anggota
-        document.querySelector('[data-menu="menu-dashboard"]').parentElement.style.display = 'none'; // <-- TAMBAHKAN BARIS INI
-        document.querySelector('[data-menu="menu1"]').parentElement.style.display = 'none';
-        document.querySelector('[data-menu="menu2"]').parentElement.style.display = 'none';
-        document.querySelector('[data-menu="menu3"]').parentElement.style.display = 'none';
-        document.querySelector('[data-menu="menu6"]').parentElement.style.display = 'none';
-        document.getElementById('new-audit-section').style.display = 'none';
+            } else if (managerRoles.includes(role)) {
+                document.getElementById('nip-input-container-4').style.display = 'none';
+                document.getElementById('auditor-info-display-4').style.display = 'none';
+                document.getElementById('anggota-selector-container').style.display = 'block';
+                document.getElementById('nip-input-container-5').style.display = 'none';
+                document.getElementById('auditor-info-display-5').style.display = 'none';
+                document.getElementById('anggota-selector-container-notisi').style.display = 'block';
 
-        // Sembunyikan semua filter, karena Anggota hanya melihat tugasnya sendiri
-        document.getElementById('filter-section-menu4').style.display = 'none';
-        document.getElementById('filter-section-menu5').style.display = 'none';
+                anggotaSelector.innerHTML = createAuditorOptions('Anggota', true);
+                anggotaSelectorNotisi.innerHTML = createAuditorOptions('Anggota', true);
+                anggotaSelector.value = 'semua';
+                anggotaSelectorNotisi.value = 'semua';
+                showMenu('menu1', document.querySelector('[data-menu="menu1"]'));
 
-        // Langsung arahkan ke menu Kertas Kerja
-        showMenu('menu4', document.querySelector('[data-menu="menu4"]'));
-
-    } else if (managerRoles.includes(role)) {
-        // Atur tampilan filter untuk Manajer
-        document.getElementById('nip-input-container-4').style.display = 'none';
-        document.getElementById('auditor-info-display-4').style.display = 'none';
-        document.getElementById('anggota-selector-container').style.display = 'block';
-
-        document.getElementById('nip-input-container-5').style.display = 'none';
-        document.getElementById('auditor-info-display-5').style.display = 'none';
-        document.getElementById('anggota-selector-container-notisi').style.display = 'block';
-
-        // Isi dropdown dengan daftar anggota
-        anggotaSelector.innerHTML = createAuditorOptions('Anggota', true);
-        anggotaSelectorNotisi.innerHTML = createAuditorOptions('Anggota', true);
-        anggotaSelector.value = 'semua';
-        anggotaSelectorNotisi.value = 'semua';
-
-        // Arahkan Manajer ke menu Data Umum
-        showMenu('menu1', document.querySelector('[data-menu="menu1"]'));
-    }
-    // PERHATIKAN: Semua baris yang memanggil renderWorksheetTable() dan renderNoticeTable() telah dihapus dari sini.
-}
+            // --- PERBAIKAN BARU: Aturan khusus untuk Inspektur ---
+            } else if (role === 'Inspektur') {
+                // Sembunyikan semua menu kecuali Dashboard
+                menuItems.forEach(item => {
+                    if (item.getAttribute('data-menu') !== 'menu-dashboard') {
+                        item.parentElement.style.display = 'none';
+                    }
+                });
+                // Sembunyikan tombol simpan utama
+                mainSaveButton.style.display = 'none';
+            }
+            // --- AKHIR PERBAIKAN ---
+        }
 
 async function saveCurrentState(isAutoSave = false) {
     if (isSaving) return;
@@ -1606,7 +1619,6 @@ function renderAll() {
         }
 
         function showMenu(menuId, element) {
-            // PERBAIKAN: Hentikan polling setiap kali berpindah menu untuk efisiensi
             stopPollingForUpdates();
 
             if (isDataDirty && !isNavigating) {
@@ -1619,21 +1631,79 @@ function renderAll() {
                 renderLHA();
             }
 
-            // PERBAIKAN: Mulai polling secara otomatis jika pengguna masuk ke menu Notisi Audit
             if (menuId === 'menu5') {
                 startPollingForUpdates();
             }
 
+            // --- PERBAIKAN DI SINI ---
             if (menuId === 'menu-dashboard') {
-                // Hanya fetch data jika belum ada, untuk efisiensi
-                if (allAuditsData.length === 0) {
-                    fetchAllAuditsDataAndRenderDashboard();
-                } else {
-                    renderDashboard(); // Render ulang dengan data yang ada
-                }
+                // Panggil fungsi baru untuk merender dashboard dari data audit yang sedang dimuat
+                renderCurrentAuditDashboard();
             }
+            // --- AKHIR PERBAIKAN ---
 
             performNavigation(menuId, element);
+        }
+
+function renderCurrentAuditDashboard() {
+            // Nonaktifkan filter global karena tidak relevan dalam tampilan audit tunggal
+            dashboardFilterSatker.disabled = true;
+            dashboardFilterTahap.disabled = true;
+            dashboardFilterSatker.value = 'semua';
+            dashboardFilterTahap.value = 'semua';
+
+            // Kumpulkan data dari state aplikasi saat ini
+            const dataUmum = collectDataUmum();
+            const hasil = { perencanaan: 0, pelaksanaan: 0, evaluasi: 0, pencapaian: 0 };
+            
+            // Hitung ulang skor 'hasil' untuk akurasi
+            for (const subKka in auditFindings) {
+                const finding = auditFindings[subKka];
+                const task = kkaData.find(k => k['Sub KKA'] === subKka);
+                if (finding && task && finding.hasil_skor) {
+                    const hasilSkor = parseFloat(String(finding.hasil_skor).replace(',', '.')) || 0;
+                    if (task.Tahap === 'Tahap Perencanaan') hasil.perencanaan += hasilSkor;
+                    else if (task.Tahap === 'Tahap Pelaksanaan') hasil.pelaksanaan += hasilSkor;
+                    else if (task.Tahap === 'Tahap Evaluasi & Pelaporan') hasil.evaluasi += hasilSkor;
+                    else if (task.Tahap === 'Tahap Pencapaian Hasil/Outcome') hasil.pencapaian += hasilSkor;
+                }
+            }
+            const totalHasil = hasil.perencanaan + hasil.pelaksanaan + hasil.evaluasi + hasil.pencapaian;
+            
+            // Hitung ulang data 'keuangan' untuk akurasi
+            let totalAnggaran = 0, totalTemuan = 0, totalTindakLanjut = 0;
+            for (const subKka in auditFindings) {
+                const f = auditFindings[subKka];
+                totalAnggaran += parseNumber(f.anggaran_diaudit);
+                totalTemuan += parseNumber(f.temuan_keuangan);
+                totalTindakLanjut += parseNumber(f.tindak_lanjut);
+            }
+
+            // Buat struktur data yang diharapkan oleh fungsi-fungsi dashboard
+            const processedDataForSingleAudit = [{
+                satker: dataUmum.nama_satuan_kerja || dataUmum.satuan_kerja,
+                hasil: hasil,
+                bobot: {
+                    perencanaan: parseFloat(dataUmum.bobot_perencanaan) || 0,
+                    pelaksanaan: parseFloat(dataUmum.bobot_pelaksanaan) || 0,
+                    evaluasi: parseFloat(dataUmum.bobot_evaluasi) || 0,
+                    pencapaian: parseFloat(dataUmum.bobot_pencapaian) || 0
+                },
+                totalHasil: totalHasil,
+                kategori: getCategoryForScore(Math.round(totalHasil)),
+                keuangan: {
+                    anggaran: totalAnggaran,
+                    temuan: totalTemuan,
+                    tindakLanjut: totalTindakLanjut,
+                    saldo: totalTemuan - totalTindakLanjut
+                }
+            }];
+
+            // Panggil semua fungsi render dashboard dengan data audit tunggal ini
+            updateScorecards(processedDataForSingleAudit, 'semua');
+            updateDashboardRekapitulasi(processedDataForSingleAudit, 'semua');
+            updateCharts(processedDataForSingleAudit);
+            updateTables(processedDataForSingleAudit);
         }
 
         function renderTeamTable() {
@@ -2324,7 +2394,7 @@ async function handleAiAnalysis() {
                 };
             } else {
                 prompt = `
-                    Anda adalah seorang auditor kinerja ahli untuk pemerintah Republik Indonesia, dengan spesialisasi pada audit kinerja di Kementerian Agama.
+                    Anda adalah seorang auditor Inspektorat Jenderal Kementerian Agama, dengan spesialisasi pada audit kinerja di Kementerian Agama.
                     Konteks Audit:
                     - Satuan Kerja: ${namaSatuanKerja}
                     - Unit Kerja: ${unitKerja}
@@ -2335,10 +2405,10 @@ async function handleAiAnalysis() {
 
                     Tolong hasilkan analisis audit yang logis dan komprehensif dengan format JSON.
                     Instruksi:
-                    1.  **sebab**: Identifikasi dan jabarkan beberapa kemungkinan penyebab utama (maksimal 3) dari 'Kondisi Negatif' dalam bentuk narasi.
+                    1.  **sebab**: Identifikasi dan jabarkan beberapa kemungkinan penyebab utama (maksimal 2) dari 'Kondisi Negatif' dalam bentuk narasi.
                     2.  **kriteria**: Berdasarkan 'Kondisi Negatif', identifikasi dan kutip peraturan perundang-undangan yang relevan yang tidak dipatuhi. **Prioritaskan dan rujuk secara spesifik pada ${regulationContext}**. Sajikan dalam bentuk narasi yang jelas dan formal.
-                    3.  **akibat**: Jabarkan maksimal 3 dampak negatif paling signifikan yang mungkin timbul dari kondisi tersebut dalam bentuk narasi.
-                    4.  **rekomendasi**: Susun maksimal 3 rekomendasi yang konkret dan dapat ditindaklanjuti untuk mengatasi kemungkinan penyebab dan mencegah 'Akibat'.
+                    3.  **akibat**: Jabarkan maksimal 2 dampak negatif paling signifikan yang mungkin timbul dari kondisi tersebut dalam bentuk narasi.
+                    4.  **rekomendasi**: Susun maksimal 2 rekomendasi yang konkret dan dapat ditindaklanjuti untuk mengatasi kemungkinan penyebab dan mencegah 'Akibat'.
 
                     Pastikan semua output dalam bahasa Indonesia formal dan ada hubungan sebab-akibat yang kuat.
                 `;
@@ -2494,71 +2564,58 @@ function saveAuditData(subKkaCode) {
 }
 
 async function handleSaveProgress() {
-    const subKkaCode = modal.dataset.currentSubKka;
-    if (saveAuditData(subKkaCode)) {
-        auditStatus[subKkaCode] = 'in-progress';
+            const subKkaCode = modal.dataset.currentSubKka;
+            if (saveAuditData(subKkaCode)) {
+                auditStatus[subKkaCode] = 'in-progress';
 
-        // --- PERBAIKAN: Menyimpan state ke server SEBELUM refresh UI ---
-        await saveCurrentState(false); 
-        // --- AKHIR PERBAIKAN ---
+                // PERBAIKAN: Memanggil fungsi simpan yang aman dan terisolasi
+                await sendFindingUpdateToServer();
+                
+                // Refresh UI setelah menyimpan
+                if (currentUserRole === 'Anggota') {
+                    renderWorksheetTable(loggedInUser.nama, false);
+                    renderNoticeTable(loggedInUser.nama, currentUserRole);
+                }
 
-        if (currentUserRole === 'Anggota') {
-            renderWorksheetTable(loggedInUser.nama, false);
-            renderNoticeTable(loggedInUser.nama, currentUserRole);
-        } else { 
-            const selectedAuditorKK = document.getElementById('anggota-selector').value;
-            renderWorksheetTable(selectedAuditorKK, true);
-            const selectedAuditorNotisi = document.getElementById('anggota-selector-notisi').value;
-            renderNoticeTable(selectedAuditorNotisi, currentUserRole);
+                modal.style.display = 'none';
+                updateRekapitulasi();
+                updateProgresStatistik();
+            }
         }
 
-        modal.style.display = 'none';
-        updateRekapitulasi();
-        updateProgresStatistik();
-    }
-}
+        async function handleFinishAudit() {
+            const subKkaCode = modal.dataset.currentSubKka;
+            const nilaiSkorInput = document.getElementById('nilai_skor');
+            const errorElement = document.getElementById('modal-error');
 
-async function handleFinishAudit() {
-    const subKkaCode = modal.dataset.currentSubKka;
-    const nilaiSkorInput = document.getElementById('nilai_skor');
-    const errorElement = document.getElementById('modal-error');
+            errorElement.textContent = '';
+            if (nilaiSkorInput.value.trim() === '') {
+                errorElement.textContent = 'Harap isi kolom "Nilai" sebelum menyelesaikan.';
+                setTimeout(() => { errorElement.textContent = ''; }, 3000);
+                return;
+            }
 
-    errorElement.textContent = '';
+            if (saveAuditData(subKkaCode)) {
+                auditStatus[subKkaCode] = 'completed';
+                const currentStatus = reviewApprovalStatus[subKkaCode];
+                if(currentStatus === 'perbaikan_ketua' || currentStatus === 'perbaikan_teknis') {
+                    reviewApprovalStatus[subKkaCode] = 'belum_direviu'; // Reset status agar bisa direviu ulang dari awal
+                }
+                
+                // PERBAIKAN: Memanggil fungsi simpan yang aman dan terisolasi
+                await sendFindingUpdateToServer();
 
-    if (nilaiSkorInput.value.trim() === '') {
-        errorElement.textContent = 'Harap isi kolom "Nilai" sebelum menyelesaikan.';
-        setTimeout(() => { errorElement.textContent = ''; }, 3000);
-        return;
-    }
+                // Refresh UI setelah menyimpan
+                if (currentUserRole === 'Anggota') {
+                    renderWorksheetTable(loggedInUser.nama, false);
+                    renderNoticeTable(loggedInUser.nama, currentUserRole);
+                }
 
-    if (saveAuditData(subKkaCode)) {
-        auditStatus[subKkaCode] = 'completed';
-        const currentStatus = reviewApprovalStatus[subKkaCode];
-        if(currentStatus === 'perbaikan_ketua') {
-            reviewApprovalStatus[subKkaCode] = 'direviu_ketua';
-        } else if (currentStatus === 'perbaikan_teknis') {
-            reviewApprovalStatus[subKkaCode] = 'direviu_teknis';
+                modal.style.display = 'none';
+                updateRekapitulasi();
+                updateProgresStatistik();
+            }
         }
-
-        // --- PERBAIKAN: Menyimpan state ke server SEBELUM refresh UI ---
-        await saveCurrentState(false);
-        // --- AKHIR PERBAIKAN ---
-
-        if (currentUserRole === 'Anggota') {
-            renderWorksheetTable(loggedInUser.nama, false);
-            renderNoticeTable(loggedInUser.nama, currentUserRole);
-        } else {
-            const selectedAuditorKK = document.getElementById('anggota-selector').value;
-            renderWorksheetTable(selectedAuditorKK, true);
-            const selectedAuditorNotisi = document.getElementById('anggota-selector-notisi').value;
-            renderNoticeTable(selectedAuditorNotisi, currentUserRole);
-        }
-
-        modal.style.display = 'none';
-        updateRekapitulasi();
-        updateProgresStatistik();
-    }
-}
         function handleEditAudit() {
             const subKkaCode = modal.dataset.currentSubKka;
             auditStatus[subKkaCode] = 'in-progress';
@@ -2702,6 +2759,33 @@ async function sendReviewUpdateToServer() {
         updateSaveStatus('Gagal menyimpan reviu', false);
     }
 }
+
+async function sendFindingUpdateToServer() {
+            updateSaveStatus('Menyimpan temuan...');
+            const nomorST = document.getElementById('no_st').value;
+            try {
+                // Payload ini hanya berisi data yang relevan dengan Anggota Tim
+                const payload = {
+                    action: 'updateTemuanAndStatus', // Aksi baru untuk backend
+                    nomor_st: nomorST,
+                    temuanAuditData: auditFindings,
+                    auditStatusData: auditStatus
+                };
+
+                const response = await fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                updateSaveStatus('Temuan tersimpan', true);
+            } catch (error) {
+                console.error("Gagal menyimpan pembaruan temuan:", error);
+                updateSaveStatus('Gagal menyimpan temuan', false);
+            }
+        }
+
         function openPrintSelectionModal() {
             // Tentukan status persetujuan final berdasarkan keberadaan Pengendali Teknis
             const hasPengendaliTeknis = auditTeam.some(m => m.role === 'Pengendali Teknis');
@@ -3491,38 +3575,58 @@ function handleSignOut() {
         }
         // Sisipkan semua fungsi baru ini di dalam tag <script>
 
-async function fetchAllAuditsDataAndRenderDashboard() {
-    showLoading("Mengambil semua data audit...");
-    try {
-        const response = await fetch(`${GAS_URL}?action=getAllAuditsData`);
-        const data = await response.json();
-        if (data.error) throw new Error(data.error);
-        
-        allAuditsData = data; // Simpan data di state global
+        async function fetchAllAuditsDataAndRenderDashboard() {
+            showLoading("Mengambil semua data audit...");
+            try {
+                // --- PERBAIKAN UTAMA: Mengambil SEMUA data via POST untuk mengatasi CORS ---
 
-        // PERBAIKAN: Muat master KKA jika belum ada
-        if (fullMasterKKA.length === 0) {
-            const kkaResponse = await fetch(`${GAS_URL}?action=getAllMasterKKA`);
-            const kkaResult = await kkaResponse.json();
-            if (kkaResult.error) throw new Error(kkaResult.error);
-            fullMasterKKA = kkaResult.masterKKA || [];
+                // Langkah 1: Ambil Master KKA terlebih dahulu via POST
+                const kkaPayload = { action: 'getAllMasterKKA' };
+                const kkaResponse = await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(kkaPayload),
+                    redirect: 'follow'
+                });
+                if (!kkaResponse.ok) throw new Error(`HTTP error! Gagal mengambil KKA Master: ${kkaResponse.status}`);
+                const kkaResult = await kkaResponse.json();
+                if (kkaResult.error) throw new Error(kkaResult.error);
+                fullMasterKKA = kkaResult.masterKKA || [];
+
+                // Langkah 2: Ambil semua data audit via POST
+                const auditsPayload = { action: 'getAllAuditsData' };
+                const auditsResponse = await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify(auditsPayload),
+                    redirect: 'follow'
+                });
+
+                if (!auditsResponse.ok) throw new Error(`HTTP error! Gagal mengambil data audit: ${auditsResponse.status}`);
+                const data = await auditsResponse.json();
+                if (data.error) throw new Error(data.error);
+                
+                allAuditsData = data; // Simpan data di state global
+
+                // Isi filter Satker sekali saja, sekarang dengan data yang valid
+                const uniqueSatkers = [...new Set(allAuditsData.map(audit => audit.dataUmum.nama_satuan_kerja || audit.dataUmum.satuan_kerja).filter(Boolean))];
+                dashboardFilterSatker.innerHTML = '<option value="semua">Semua Satker</option>';
+                uniqueSatkers.sort().forEach(satker => {
+                    dashboardFilterSatker.innerHTML += `<option value="${satker}">${satker}</option>`;
+                });
+                
+                // Aktifkan filter
+                dashboardFilterSatker.disabled = false;
+                dashboardFilterTahap.disabled = false;
+
+                renderDashboard(); // Render dashboard untuk pertama kali
+            } catch (error) {
+                console.error("Gagal mengambil semua data audit:", error);
+                alert("Gagal mengambil data untuk dashboard. Coba lagi.");
+            } finally {
+                hideLoading();
+            }
         }
-
-        // Isi filter Satker sekali saja
-        const uniqueSatkers = [...new Set(allAuditsData.map(audit => audit.dataUmum.satuan_kerja).filter(Boolean))];
-        dashboardFilterSatker.innerHTML = '<option value="semua">Semua Satker</option>';
-        uniqueSatkers.forEach(satker => {
-            dashboardFilterSatker.innerHTML += `<option value="${satker}">${satker}</option>`;
-        });
-
-        renderDashboard(); // Render dashboard untuk pertama kali
-    } catch (error) {
-        console.error("Gagal mengambil semua data audit:", error);
-        alert("Gagal mengambil data untuk dashboard. Coba lagi.");
-    } finally {
-        hideLoading();
-    }
-}
 
 function stopPollingForUpdates() {
             if (pollingIntervalId) {
@@ -3575,77 +3679,81 @@ function stopPollingForUpdates() {
         }
 
 function renderDashboard() {
-    // 1. Filter data berdasarkan pilihan dropdown
-    const selectedSatker = dashboardFilterSatker.value;
-    const selectedTahap = dashboardFilterTahap.value;
+            // 1. Filter data berdasarkan pilihan dropdown
+            const selectedSatker = dashboardFilterSatker.value;
+            const selectedTahap = dashboardFilterTahap.value;
 
-    let filteredAudits = allAuditsData;
-    if (selectedSatker !== 'semua') {
-        filteredAudits = filteredAudits.filter(audit => audit.dataUmum.satuan_kerja === selectedSatker);
-    }
-
-    // 2. Proses dan agregasi data yang sudah difilter
-    const processedData = filteredAudits.map(audit => {
-        const hasil = { perencanaan: 0, pelaksanaan: 0, evaluasi: 0, pencapaian: 0 };
-        const bobot = { 
-            perencanaan: parseFloat(audit.dataUmum.bobot_perencanaan) || 0,
-            pelaksanaan: parseFloat(audit.dataUmum.bobot_pelaksanaan) || 0,
-            evaluasi: parseFloat(audit.dataUmum.bobot_evaluasi) || 0,
-            pencapaian: parseFloat(audit.dataUmum.bobot_pencapaian) || 0
-        };
-
-        // PERBAIKAN DIMULAI DI SINI
-        // Mengganti logika untuk menggunakan variabel global 'fullMasterKKA' yang sudah dimuat
-        for (const subKka in audit.temuanAudit) {
-            const finding = audit.temuanAudit[subKka];
-            // Menggunakan daftar KKA master yang lengkap untuk mencari detail tugas
-            const task = fullMasterKKA.find(k => k['Sub KKA'] === subKka);
-            
-            if (finding && task && finding.hasil_skor) {
-                const hasilSkor = parseFloat(String(finding.hasil_skor).replace(',', '.')) || 0;
-                if (task.Tahap === 'Tahap Perencanaan') hasil.perencanaan += hasilSkor;
-                else if (task.Tahap === 'Tahap Pelaksanaan') hasil.pelaksanaan += hasilSkor;
-                else if (task.Tahap === 'Tahap Evaluasi & Pelaporan') hasil.evaluasi += hasilSkor;
-                else if (task.Tahap === 'Tahap Pencapaian Hasil/Outcome') hasil.pencapaian += hasilSkor;
+            let filteredAudits = allAuditsData;
+            if (selectedSatker !== 'semua') {
+                // MODIFIKASI: Menggunakan nama_satuan_kerja untuk filter yang lebih andal
+                filteredAudits = filteredAudits.filter(audit => (audit.dataUmum.nama_satuan_kerja || audit.dataUmum.satuan_kerja) === selectedSatker);
             }
+
+            // 2. Proses dan agregasi data yang sudah difilter
+            const processedData = filteredAudits.map(audit => {
+                const hasil = { perencanaan: 0, pelaksanaan: 0, evaluasi: 0, pencapaian: 0 };
+                const bobot = { 
+                    perencanaan: parseFloat(audit.dataUmum.bobot_perencanaan) || 0,
+                    pelaksanaan: parseFloat(audit.dataUmum.bobot_pelaksanaan) || 0,
+                    evaluasi: parseFloat(audit.dataUmum.bobot_evaluasi) || 0,
+                    pencapaian: parseFloat(audit.dataUmum.bobot_pencapaian) || 0
+                };
+
+                // --- PERBAIKAN UTAMA DIMULAI DI SINI ---
+                // Logika sekarang menggunakan `audit.masterKKA` yang sudah disediakan oleh backend,
+                // bukan lagi `fullMasterKKA` global.
+                if (audit.masterKKA && Array.isArray(audit.masterKKA)) {
+                    for (const subKka in audit.temuanAudit) {
+                        const finding = audit.temuanAudit[subKka];
+                        // Menggunakan master KKA yang relevan dari dalam objek audit itu sendiri
+                        const task = audit.masterKKA.find(k => k['Sub KKA'] === subKka);
+                        
+                        if (finding && task && finding.hasil_skor) {
+                            const hasilSkor = parseFloat(String(finding.hasil_skor).replace(',', '.')) || 0;
+                            if (task.Tahap === 'Tahap Perencanaan') hasil.perencanaan += hasilSkor;
+                            else if (task.Tahap === 'Tahap Pelaksanaan') hasil.pelaksanaan += hasilSkor;
+                            else if (task.Tahap === 'Tahap Evaluasi & Pelaporan') hasil.evaluasi += hasilSkor;
+                            else if (task.Tahap === 'Tahap Pencapaian Hasil/Outcome') hasil.pencapaian += hasilSkor;
+                        }
+                    }
+                }
+                // --- AKHIR PERBAIKAN ---
+                
+                const totalHasil = hasil.perencanaan + hasil.pelaksanaan + hasil.evaluasi + hasil.pencapaian;
+                
+                let totalAnggaran = 0, totalTemuan = 0, totalTindakLanjut = 0;
+                for (const subKka in audit.temuanAudit) {
+                    const f = audit.temuanAudit[subKka];
+                    totalAnggaran += parseNumber(f.anggaran_diaudit);
+                    totalTemuan += parseNumber(f.temuan_keuangan);
+                    totalTindakLanjut += parseNumber(f.tindak_lanjut);
+                }
+
+                return {
+                    satker: audit.dataUmum.nama_satuan_kerja || audit.dataUmum.satuan_kerja,
+                    hasil: hasil,
+                    bobot: bobot,
+                    totalHasil: totalHasil,
+                    kategori: getCategoryForScore(Math.round(totalHasil)),
+                    keuangan: {
+                        anggaran: totalAnggaran,
+                        temuan: totalTemuan,
+                        tindakLanjut: totalTindakLanjut,
+                        saldo: totalTemuan - totalTindakLanjut
+                    }
+                };
+            });
+
+            // 3. Update Scorecards & Rekapitulasi dengan filter tahap
+            updateScorecards(processedData, selectedTahap);
+            updateDashboardRekapitulasi(processedData, selectedTahap);
+
+            // 4. Update Charts
+            updateCharts(processedData);
+
+            // 5. Update Tables
+            updateTables(processedData);
         }
-        // PERBAIKAN SELESAI
-        
-        const totalHasil = hasil.perencanaan + hasil.pelaksanaan + hasil.evaluasi + hasil.pencapaian;
-        
-        let totalAnggaran = 0, totalTemuan = 0, totalTindakLanjut = 0;
-        for (const subKka in audit.temuanAudit) {
-            const f = audit.temuanAudit[subKka];
-            totalAnggaran += parseNumber(f.anggaran_diaudit);
-            totalTemuan += parseNumber(f.temuan_keuangan);
-            totalTindakLanjut += parseNumber(f.tindak_lanjut);
-        }
-
-        return {
-            satker: audit.dataUmum.nama_satuan_kerja || audit.dataUmum.satuan_kerja,
-            hasil: hasil,
-            bobot: bobot,
-            totalHasil: totalHasil,
-            kategori: getCategoryForScore(Math.round(totalHasil)),
-            keuangan: {
-                anggaran: totalAnggaran,
-                temuan: totalTemuan,
-                tindakLanjut: totalTindakLanjut,
-                saldo: totalTemuan - totalTindakLanjut
-            }
-        };
-    });
-
-    // 3. Update Scorecards & Rekapitulasi dengan filter tahap
-    updateScorecards(processedData, selectedTahap);
-    updateDashboardRekapitulasi(processedData, selectedTahap);
-
-    // 4. Update Charts
-    updateCharts(processedData);
-
-    // 5. Update Tables
-    updateTables(processedData);
-}
 
 function updateScorecards(data, selectedTahap) {
     if (data.length === 0) {
@@ -3946,7 +4054,7 @@ async function handleAiSummaryGeneration() {
 
     // 4. Prompt AI yang diperbarui dengan konteks tanggal
     const prompt = `
-        Anda adalah seorang Inspektur Jenderal yang bertugas menyusun Laporan Hasil Audit Kinerja Konsolidasi untuk periode **${startDate.toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'})} hingga ${endDate.toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'})}**. Berdasarkan data terfilter berikut, buatlah laporan yang komprehensif, padat, dan jelas dalam format Markdown.
+        Anda adalah seorang Auditor Muda yang bertugas menyusun Laporan Hasil Audit Kinerja Konsolidasi untuk periode **${startDate.toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'})} hingga ${endDate.toLocaleDateString('id-ID', {day: '2-digit', month: 'long', year: 'numeric'})}**. Berdasarkan data terfilter berikut, buatlah laporan yang komprehensif, padat, dan jelas dalam format Markdown.
 
         **Data Kinerja (Periode Laporan):**
         ${JSON.stringify(kinerjaData, null, 2)}
@@ -4106,41 +4214,61 @@ dashboardFilterSatker.addEventListener('change', renderDashboard);
 dashboardFilterTahap.addEventListener('change', renderDashboard);
 btnGenerateSummary.addEventListener('click', handleAiSummaryGeneration);
     </script>
-    <!-- Notifikasi Update untuk index.html -->
-<div id="notification" class="modal" style="display: none; z-index: 2000;">
-    <div class="modal-content bg-white w-11/12 md:max-w-md mx-auto rounded-lg shadow-xl p-8 text-center">
-        <h2 id="notification-title" class="text-xl font-bold mb-4">Pembaruan Tersedia</h2>
-        <p id="notification-message" class="text-gray-600 mb-6">Versi baru telah diunduh. Mulai ulang aplikasi untuk menerapkan pembaruan.</p>
-        <div class="flex justify-center space-x-4">
-            <button id="close-notification" class="px-4 py-2 bg-gray-300 text-gray-800 rounded-md hover:bg-gray-400">Nanti</button>
-            <button id="restart-app" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Mulai Ulang Sekarang</button>
+
+<!-- ======================================================= -->
+<!-- MULAI: Kode Notifikasi Pembaruan Aplikasi             -->
+<!-- ======================================================= -->
+
+<!-- Bagian 1: Tampilan Notifikasi (HTML) -->
+<div id="notification" class="modal" style="display: none; position: fixed; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 2000;">
+    <div class="modal-content" style="background-color: white; width: 90%; max-width: 450px; margin: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 32px; text-align: center;">
+        <h2 id="notification-title" style="font-size: 1.25rem; font-weight: 700; margin-bottom: 16px;">Pembaruan Tersedia</h2>
+        <p id="notification-message" style="color: #4A5568; margin-bottom: 24px;">Versi baru telah diunduh. Mulai ulang aplikasi untuk menerapkan pembaruan.</p>
+        <div style="display: flex; justify-content: center; gap: 16px;">
+            <button id="close-notification" style="padding: 8px 16px; background-color: #E2E8F0; color: #2D3748; border-radius: 6px; border: none; cursor: pointer;">Nanti</button>
+            <button id="restart-app" style="padding: 8px 16px; background-color: #3B82F6; color: white; border-radius: 6px; border: none; cursor: pointer;">Mulai Ulang Sekarang</button>
         </div>
     </div>
 </div>
 
+<!-- Bagian 2: Logika Notifikasi (JavaScript) -->
 <script>
     const notification = document.getElementById('notification');
     const closeButton = document.getElementById('close-notification');
     const restartButton = document.getElementById('restart-app');
 
+    // Pastikan electronAPI tersedia sebelum menambahkan listener
     if (window.electronAPI) {
+    
+        // Listener untuk event 'update_available' dari proses utama
         window.electronAPI.onUpdateAvailable(() => {
             console.log('Pembaruan tersedia, sedang mengunduh...');
+            // Di sini Anda bisa menambahkan notifikasi kecil jika mau, misal "Mengunduh pembaruan..."
         });
 
+        // Listener untuk event 'update_downloaded' dari proses utama
+        // Ini akan memunculkan pop-up notifikasi
         window.electronAPI.onUpdateDownloaded(() => {
             notification.style.display = 'flex';
         });
 
+        // Logika untuk tombol "Nanti"
         closeButton.addEventListener('click', () => {
             notification.style.display = 'none';
         });
 
+        // Logika untuk tombol "Mulai Ulang Sekarang"
         restartButton.addEventListener('click', () => {
+            // Mengirim sinyal kembali ke proses utama untuk me-restart aplikasi
             window.electronAPI.restartApp();
         });
     }
 </script>
+
+<!-- ======================================================= -->
+<!-- SELESAI: Kode Notifikasi Pembaruan Aplikasi            -->
+<!-- ======================================================= -->
+
 </body>
 </html>
 ...im...
