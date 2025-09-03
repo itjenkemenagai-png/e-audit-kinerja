@@ -4218,47 +4218,71 @@ btnGenerateSummary.addEventListener('click', handleAiSummaryGeneration);
 <!-- MULAI: Kode Notifikasi Pembaruan Aplikasi             -->
 <!-- ======================================================= -->
 
-<!-- Bagian 1: Tampilan Notifikasi (HTML) -->
-<div id="notification" class="modal" style="display: none; position: fixed; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 2000;">
-    <div class="modal-content" style="background-color: white; width: 90%; max-width: 450px; margin: auto; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 32px; text-align: center;">
-        <h2 id="notification-title" style="font-size: 1.25rem; font-weight: 700; margin-bottom: 16px;">Pembaruan Tersedia</h2>
-        <p id="notification-message" style="color: #4A5568; margin-bottom: 24px;">Versi baru telah diunduh. Mulai ulang aplikasi untuk menerapkan pembaruan.</p>
-        <div style="display: flex; justify-content: center; gap: 16px;">
-            <button id="close-notification" style="padding: 8px 16px; background-color: #E2E8F0; color: #2D3748; border-radius: 6px; border: none; cursor: pointer;">Nanti</button>
-            <button id="restart-app" style="padding: 8px 16px; background-color: #3B82F6; color: white; border-radius: 6px; border: none; cursor: pointer;">Mulai Ulang Sekarang</button>
-        </div>
-    </div>
-</div>
-
-<!-- Bagian 2: Logika Notifikasi (JavaScript) -->
 <script>
     const notification = document.getElementById('notification');
+    const notificationTitle = document.getElementById('notification-title');
+    const notificationMessage = document.getElementById('notification-message');
     const closeButton = document.getElementById('close-notification');
     const restartButton = document.getElementById('restart-app');
 
-    // Pastikan electronAPI tersedia sebelum menambahkan listener
     if (window.electronAPI) {
     
-        // Listener untuk event 'update_available' dari proses utama
-        window.electronAPI.onUpdateAvailable(() => {
-            console.log('Pembaruan tersedia, sedang mengunduh...');
-            // Di sini Anda bisa menambahkan notifikasi kecil jika mau, misal "Mengunduh pembaruan..."
-        });
-
-        // Listener untuk event 'update_downloaded' dari proses utama
-        // Ini akan memunculkan pop-up notifikasi
-        window.electronAPI.onUpdateDownloaded(() => {
+        // Saat pengecekan dimulai
+        window.electronAPI.onUpdateChecking(() => {
+            notificationTitle.textContent = 'Memeriksa Pembaruan';
+            notificationMessage.textContent = 'Menghubungi server untuk memeriksa versi terbaru...';
+            restartButton.style.display = 'none'; // Sembunyikan tombol restart
+            closeButton.textContent = 'Tutup';
             notification.style.display = 'flex';
         });
 
-        // Logika untuk tombol "Nanti"
+        // Saat tidak ada pembaruan ditemukan
+        window.electronAPI.onUpdateNotAvailable(() => {
+            notificationTitle.textContent = 'Tidak Ada Pembaruan';
+            notificationMessage.textContent = 'Anda sudah menggunakan versi aplikasi yang terbaru.';
+            restartButton.style.display = 'none';
+            closeButton.textContent = 'OK';
+            notification.style.display = 'flex';
+            // Sembunyikan notifikasi setelah 3 detik
+            setTimeout(() => {
+                notification.style.display = 'none';
+            }, 3000);
+        });
+        
+        // Saat pembaruan ditemukan dan sedang diunduh
+        window.electronAPI.onUpdateAvailable(() => {
+            notificationTitle.textContent = 'Pembaruan Ditemukan';
+            notificationMessage.textContent = 'Mengunduh versi baru di latar belakang. Anda akan diberi tahu jika sudah selesai.';
+            restartButton.style.display = 'none';
+            closeButton.textContent = 'OK';
+            notification.style.display = 'flex';
+        });
+
+        // Saat pembaruan telah selesai diunduh
+        window.electronAPI.onUpdateDownloaded(() => {
+            notificationTitle.textContent = 'Pembaruan Siap Diinstal';
+            notificationMessage.textContent = 'Versi baru telah diunduh. Mulai ulang aplikasi untuk menerapkan pembaruan.';
+            restartButton.style.display = 'inline-flex'; // Tampilkan kembali tombol restart
+            closeButton.textContent = 'Nanti';
+            notification.style.display = 'flex';
+        });
+
+        // Saat terjadi error
+        window.electronAPI.onUpdateError((error) => {
+            notificationTitle.textContent = 'Gagal Memperbarui';
+            notificationMessage.textContent = 'Terjadi kesalahan saat memeriksa pembaruan. Silakan periksa koneksi internet Anda.';
+            restartButton.style.display = 'none';
+            closeButton.textContent = 'Tutup';
+            notification.style.display = 'flex';
+            console.error('Update error:', error);
+        });
+
+        // Logika untuk tombol
         closeButton.addEventListener('click', () => {
             notification.style.display = 'none';
         });
 
-        // Logika untuk tombol "Mulai Ulang Sekarang"
         restartButton.addEventListener('click', () => {
-            // Mengirim sinyal kembali ke proses utama untuk me-restart aplikasi
             window.electronAPI.restartApp();
         });
     }
