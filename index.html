@@ -1100,7 +1100,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (result.status === 'success') {
                     loggedInUser = { username: result.username, nip: result.nip, nama: result.nama };
 
-                    // --- PERBAIKAN UTAMA: Percabangan Alur Berdasarkan Peran ---
+                    // --- PERUBAIKAN UTAMA: Percabangan Alur Berdasarkan Peran ---
                     if (loggedInUser.username.toLowerCase() === 'inspektur') {
                         // Alur untuk Inspektur: Langsung ke Dashboard Global
                         loginModal.style.display = 'none';
@@ -1121,7 +1121,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             loadUsersList() 
                         ]);
                     }
-                    // --- AKHIR PERBAIKAN ---
+                    // --- AKHIR PERUBAIKAN ---
 
                 } else {
                     loginError.textContent = result.message || 'Login gagal.';
@@ -2260,7 +2260,7 @@ function renderNoticeTable(selectedAuditorName, viewerRole) {
                 const isBeingReviewedByTeknis = ['direviu_teknis', 'perbaikan_teknis'].includes(currentReviewStatus);
                 
                 const isKetuaEditable = isKetua && !isApprovedByTeknis && !isBeingReviewedByTeknis;
-                const isTeknisEditable = isTeknis && ['disetujui_ketua', 'direviu_teknis', 'perbaikan_teknis'].includes(currentReviewStatus);
+                const isTeknisEditable = isTeknis && ['disetujui_ketua', 'direviu_teknis', 'perbaikan_teknis', 'disetujui_teknis'].includes(currentReviewStatus);
 
                 modalHtml += `<div class="border-t pt-4 mt-4 space-y-4">`;
                 // Reviu Ketua Tim
@@ -3606,7 +3606,7 @@ function handleSignOut() {
                 const data = await auditsResponse.json();
                 if (data.error) throw new Error(data.error);
                 
-                allAuditsData = data; // Simpan data di state global
+                allAuditsData = data.allAudits; // Simpan data di state global
 
                 // Isi filter Satker sekali saja, sekarang dengan data yang valid
                 const uniqueSatkers = [...new Set(allAuditsData.map(audit => audit.dataUmum.nama_satuan_kerja || audit.dataUmum.satuan_kerja).filter(Boolean))];
@@ -3700,13 +3700,12 @@ function renderDashboard() {
                 };
 
                 // --- PERBAIKAN UTAMA DIMULAI DI SINI ---
-                // Logika sekarang menggunakan `audit.masterKKA` yang sudah disediakan oleh backend,
-                // bukan lagi `fullMasterKKA` global.
-                if (audit.masterKKA && Array.isArray(audit.masterKKA)) {
+                // Logika sekarang menggunakan `fullMasterKKA` global yang sudah di-fetch sebelumnya.
+                if (fullMasterKKA && Array.isArray(fullMasterKKA)) {
                     for (const subKka in audit.temuanAudit) {
                         const finding = audit.temuanAudit[subKka];
-                        // Menggunakan master KKA yang relevan dari dalam objek audit itu sendiri
-                        const task = audit.masterKKA.find(k => k['Sub KKA'] === subKka);
+                        // Menggunakan master KKA global untuk mencari data KKA yang relevan
+                        const task = fullMasterKKA.find(k => k['Sub KKA'] === subKka);
                         
                         if (finding && task && finding.hasil_skor) {
                             const hasilSkor = parseFloat(String(finding.hasil_skor).replace(',', '.')) || 0;
