@@ -1,6 +1,6 @@
 {
   "name": "e-audit-kinerja",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Aplikasi E-Audit Kinerja Desktop untuk Itjen Kemenag",
   "main": "main.js",
   "scripts": {

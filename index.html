@@ -2610,6 +2610,15 @@ async function handleReviewActions(event) {
     if (!button) return;
 
     const subKkaCode = modal.dataset.currentSubKka;
+    
+    // --- PERBAIKAN UTAMA DI SINI ---
+    // Pastikan objek untuk KKA ini sudah ada (diinisialisasi) sebelum diakses.
+    // Ini mencegah error "cannot set properties of undefined".
+    if (!reviewNotes[subKkaCode]) {
+        reviewNotes[subKkaCode] = { ketua: '', teknis: '' };
+    }
+    // --- AKHIR PERBAIKAN ---
+
     const reviewType = button.dataset.reviewType;
     const textarea = document.getElementById(`reviu_${reviewType}`);
     const saveBtn = button.parentElement.querySelector('.review-save-btn');
@@ -4146,7 +4155,7 @@ async function handleAiSummaryGeneration() {
 <!-- MULAI: Kode Notifikasi Pembaruan Aplikasi             -->
 <!-- ======================================================= -->
 
-<script>
+    <script>
     const notification = document.getElementById('notification');
     const notificationTitle = document.getElementById('notification-title');
     const notificationMessage = document.getElementById('notification-message');
