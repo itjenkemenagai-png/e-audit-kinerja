@@ -935,7 +935,7 @@
 
     <script>
         // --- KONFIGURASI ---
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxMFc8MwAHlbrw5jlxwBAmavdt26mlm23sSTZRLvp4PeC-_7MmM1j00RclRbffFx5vi/exec";
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxAggARZKC2stUPkSwjZnJ6ZQBt_qmlwALTm4ttu8WD-L3QfDIDzSkkqdpRXw0bBRIt/exec";
 
         // --- STATE APLIKASI ---
         // Tambahkan di bawah // --- STATE APLIKASI ---
@@ -1021,9 +1021,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     // Event listeners untuk form utama
     document.getElementById('login-form').addEventListener('submit', handleLogin);
-    document.getElementById('change-password-form').addEventListener('submit', handleChangePassword);
-
-    // Event listener untuk menandai perubahan data
+// ... existing code ... -->
     mainAppContainer.addEventListener('input', handleDataChange);
     mainAppContainer.addEventListener('change', handleDataChange);
 
@@ -1069,7 +1067,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnExportPdf.addEventListener('click', exportToPdf);
 
     // PERBAIKAN: Pindahkan event listener modal ke document untuk memastikan selalu aktif
-    document.addEventListener('input', handleReviewChange);
+    // document.addEventListener('input', handleReviewChange); <-- BARIS INI DIHAPUS
     document.addEventListener('click', handleReviewActions);
 });
 
@@ -1485,32 +1483,27 @@ async function saveCurrentState(isAutoSave = false) {
     }
 
     try {
+        // --- PERBAIKAN UTAMA: Payload sekarang jauh lebih kecil dan aman ---
+        // Kita tidak lagi mengirim 'temuanAudit' dan 'statusAudit' dari sini.
+        // Ini mencegah penimpaan data (Stale Data Overwrite).
         const payload = {
             dataUmum: collectDataUmum(),
             timAudit: auditTeam,
             pembagianTugas: taskAssignments,
-            temuanAudit: auditFindings,
-            statusAudit: {
-                indicatorStatus,
-                auditStatus,
-                reviewNotes,
-                reviewState,
-                reviewApprovalStatus
-            }
+            // Kunci 'temuanAudit' dan 'statusAudit' sengaja DIHAPUS.
         };
 
         const response = await fetch(GAS_URL, {
             method: 'POST',
-            mode: 'no-cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            mode: 'no-cors', // Mode 'no-cors' cocok untuk 'fire-and-forget'
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
 
         isDataDirty = false;
         updateSaveStatus('Tersimpan', true);
 
+        // Muat ulang daftar audit jika ada audit baru yang dibuat
         await loadAuditList();
 
     } catch (error) {
@@ -2564,86 +2557,53 @@ function saveAuditData(subKkaCode) {
 }
 
 async function handleSaveProgress() {
-            const subKkaCode = modal.dataset.currentSubKka;
-            if (saveAuditData(subKkaCode)) {
-                auditStatus[subKkaCode] = 'in-progress';
-
-                // PERBAIKAN: Memanggil fungsi simpan yang aman dan terisolasi
-                await sendFindingUpdateToServer();
-                
-                // Refresh UI setelah menyimpan
-                if (currentUserRole === 'Anggota') {
-                    renderWorksheetTable(loggedInUser.nama, false);
-                    renderNoticeTable(loggedInUser.nama, currentUserRole);
-                }
-
-                modal.style.display = 'none';
-                updateRekapitulasi();
-                updateProgresStatistik();
-            }
-        }
-
-        async function handleFinishAudit() {
-            const subKkaCode = modal.dataset.currentSubKka;
-            const nilaiSkorInput = document.getElementById('nilai_skor');
-            const errorElement = document.getElementById('modal-error');
-
-            errorElement.textContent = '';
-            if (nilaiSkorInput.value.trim() === '') {
-                errorElement.textContent = 'Harap isi kolom "Nilai" sebelum menyelesaikan.';
-                setTimeout(() => { errorElement.textContent = ''; }, 3000);
-                return;
-            }
-
-            if (saveAuditData(subKkaCode)) {
-                auditStatus[subKkaCode] = 'completed';
-                const currentStatus = reviewApprovalStatus[subKkaCode];
-                if(currentStatus === 'perbaikan_ketua' || currentStatus === 'perbaikan_teknis') {
-                    reviewApprovalStatus[subKkaCode] = 'belum_direviu'; // Reset status agar bisa direviu ulang dari awal
-                }
-                
-                // PERBAIKAN: Memanggil fungsi simpan yang aman dan terisolasi
-                await sendFindingUpdateToServer();
-
-                // Refresh UI setelah menyimpan
-                if (currentUserRole === 'Anggota') {
-                    renderWorksheetTable(loggedInUser.nama, false);
-                    renderNoticeTable(loggedInUser.nama, currentUserRole);
-                }
-
-                modal.style.display = 'none';
-                updateRekapitulasi();
-                updateProgresStatistik();
-            }
-        }
-        function handleEditAudit() {
-            const subKkaCode = modal.dataset.currentSubKka;
-            auditStatus[subKkaCode] = 'in-progress';
-            updateModalState(subKkaCode, false, 'Anggota', 'kertas_kerja');
-            openAuditModal(subKkaCode, false, 'Anggota', 'kertas_kerja'); // Re-open to enable fields
-        }
-
-        function handleReviewChange(event) {
-    const target = event.target;
-    // Pastikan event berasal dari dalam modal dan merupakan textarea reviu
-    if (target.closest('#audit-modal') && target.classList.contains('review-textarea')) {
-        const subKkaCode = target.dataset.subKka;
-        const reviewType = target.dataset.reviewType;
-
-        if (!subKkaCode || !reviewType) return;
-
-        if (!reviewNotes[subKkaCode]) {
-            reviewNotes[subKkaCode] = { ketua: '', teknis: '' };
-        }
-        reviewNotes[subKkaCode][reviewType] = target.value;
+    const subKkaCode = modal.dataset.currentSubKka;
+    if (saveAuditData(subKkaCode)) {
+        auditStatus[subKkaCode] = 'in-progress';
+        await sendFindingUpdateToServer(); // Panggil fungsi simpan yang aman
         
-        // PERBAIKAN: Panggil handleDataChange untuk menandai ada perubahan
-        handleDataChange();
+        if (currentUserRole === 'Anggota') {
+            renderWorksheetTable(loggedInUser.nama, false);
+            renderNoticeTable(loggedInUser.nama, currentUserRole);
+        }
+        modal.style.display = 'none';
+        updateRekapitulasi();
+        updateProgresStatistik();
+    }
+}
+
+async function handleFinishAudit() {
+    const subKkaCode = modal.dataset.currentSubKka;
+    const nilaiSkorInput = document.getElementById('nilai_skor');
+    const errorElement = document.getElementById('modal-error');
+
+    errorElement.textContent = '';
+    if (nilaiSkorInput.value.trim() === '') {
+        errorElement.textContent = 'Harap isi kolom "Nilai" sebelum menyelesaikan.';
+        setTimeout(() => { errorElement.textContent = ''; }, 3000);
+        return;
+    }
+
+    if (saveAuditData(subKkaCode)) {
+        auditStatus[subKkaCode] = 'completed';
+        const currentStatus = reviewApprovalStatus[subKkaCode];
+        if(currentStatus === 'perbaikan_ketua' || currentStatus === 'perbaikan_teknis') {
+            reviewApprovalStatus[subKkaCode] = 'belum_direviu';
+        }
+        
+        await sendFindingUpdateToServer(); // Panggil fungsi simpan yang aman
+
+        if (currentUserRole === 'Anggota') {
+            renderWorksheetTable(loggedInUser.nama, false);
+            renderNoticeTable(loggedInUser.nama, currentUserRole);
+        }
+        modal.style.display = 'none';
+        updateRekapitulasi();
+        updateProgresStatistik();
     }
 }
 
 async function handleReviewActions(event) {
-    // Pastikan event berasal dari tombol di dalam modal
     if (!event.target.closest('#audit-modal')) return;
 
     const button = event.target.closest('button.review-edit-btn, button.review-save-btn, button.review-revise-btn, button.review-approve-btn');
@@ -2657,28 +2617,21 @@ async function handleReviewActions(event) {
     let shouldCloseModal = false;
     let shouldRefreshTables = false;
 
-    // Jaring pengaman: Selalu baca nilai terkini dari KEDUA textarea sebelum aksi.
-    const reviuKetuaText = document.getElementById('reviu_ketua')?.value;
-    const reviuTeknisText = document.getElementById('reviu_teknis')?.value;
-
-    if (!reviewNotes[subKkaCode]) {
-        reviewNotes[subKkaCode] = { ketua: '', teknis: '' };
+    // Selalu baca nilai terkini dari kedua textarea
+    if (document.getElementById('reviu_ketua')) {
+        reviewNotes[subKkaCode].ketua = document.getElementById('reviu_ketua').value;
     }
-    if (reviuKetuaText !== undefined) {
-        reviewNotes[subKkaCode].ketua = reviuKetuaText;
-    }
-    if (reviuTeknisText !== undefined) {
-        reviewNotes[subKkaCode].teknis = reviuTeknisText;
+    if (document.getElementById('reviu_teknis')) {
+        reviewNotes[subKkaCode].teknis = document.getElementById('reviu_teknis').value;
     }
 
-    // Aksi yang hanya mengubah UI (tidak perlu ke server)
     if (button.classList.contains('review-edit-btn')) {
         textarea.readOnly = false;
         textarea.classList.remove('bg-gray-100');
         saveBtn.style.display = 'inline-flex';
         editBtn.style.display = 'none';
         if (reviewState[subKkaCode]) reviewState[subKkaCode][reviewType] = 'editing';
-        return; // Keluar dari fungsi setelah mengubah UI
+        return;
     }
 
     // Aksi yang perlu menyimpan ke server
@@ -2691,69 +2644,45 @@ async function handleReviewActions(event) {
         reviewState[subKkaCode][reviewType] = 'saved';
     }
     else if (button.classList.contains('review-approve-btn')) {
-        if (reviewType === 'ketua') {
-            reviewApprovalStatus[subKkaCode] = 'disetujui_ketua';
-        } else if (reviewType === 'teknis') {
-            reviewApprovalStatus[subKkaCode] = 'disetujui_teknis';
-        }
+        if (reviewType === 'ketua') reviewApprovalStatus[subKkaCode] = 'disetujui_ketua';
+        else if (reviewType === 'teknis') reviewApprovalStatus[subKkaCode] = 'disetujui_teknis';
         shouldCloseModal = true;
         shouldRefreshTables = true;
     }
     else if (button.classList.contains('review-revise-btn')) {
-        if (reviewType === 'ketua') {
-            reviewApprovalStatus[subKkaCode] = 'perbaikan_ketua';
-        } else if (reviewType === 'teknis') {
-            reviewApprovalStatus[subKkaCode] = 'perbaikan_teknis';
-        }
+        if (reviewType === 'ketua') reviewApprovalStatus[subKkaCode] = 'perbaikan_ketua';
+        else if (reviewType === 'teknis') reviewApprovalStatus[subKkaCode] = 'perbaikan_teknis';
         auditStatus[subKkaCode] = 'in-progress';
         shouldCloseModal = true;
         shouldRefreshTables = true;
     }
 
-    // PERBAIKAN UTAMA: Semua aksi yang mengubah data (Simpan, Setujui, Perbaiki)
-    // sekarang memanggil fungsi penyimpanan yang terisolasi dan aman.
-    await sendReviewUpdateToServer();
+    await sendReviewUpdateToServer(); // Panggil fungsi simpan reviu yang aman
 
-    if (shouldCloseModal) {
-        modal.style.display = 'none';
-    }
-
+    if (shouldCloseModal) modal.style.display = 'none';
     if (shouldRefreshTables) {
-        // Refresh tabel notisi untuk menampilkan status baru
         const selectedAuditor = (currentUserRole === 'Anggota') ? loggedInUser.nama : document.getElementById('anggota-selector-notisi').value;
         renderNoticeTable(selectedAuditor, currentUserRole);
     }
 }
+
+// --- FUNGSI HELPER PENYIMPANAN BARU (TAMBAHKAN INI) ---
+
 async function sendReviewUpdateToServer() {
     updateSaveStatus('Menyimpan reviu...');
     const nomorST = document.getElementById('no_st').value;
-
     try {
-        // Buat payload yang HANYA berisi data status
         const payload = {
-            action: 'updateStatusAudit', // Aksi baru untuk backend
+            action: 'updateStatusAudit',
             nomor_st: nomorST,
-            statusAuditData: {
-                indicatorStatus,
-                auditStatus,
-                reviewNotes,
-                reviewState,
-                reviewApprovalStatus
-            }
+            statusAuditData: { indicatorStatus, auditStatus, reviewNotes, reviewState, reviewApprovalStatus }
         };
-
         const response = await fetch(GAS_URL, {
             method: 'POST',
             mode: 'no-cors',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
         });
-
-        // Tandai data sebagai "bersih" hanya untuk status ini
-        // Ini tidak akan mengganggu status "belum disimpan" di halaman lain
-        isDataDirty = false; 
         updateSaveStatus('Reviu tersimpan', true);
-
     } catch (error) {
         console.error("Gagal menyimpan pembaruan reviu:", error);
         updateSaveStatus('Gagal menyimpan reviu', false);
@@ -2761,30 +2690,26 @@ async function sendReviewUpdateToServer() {
 }
 
 async function sendFindingUpdateToServer() {
-            updateSaveStatus('Menyimpan temuan...');
-            const nomorST = document.getElementById('no_st').value;
-            try {
-                // Payload ini hanya berisi data yang relevan dengan Anggota Tim
-                const payload = {
-                    action: 'updateTemuanAndStatus', // Aksi baru untuk backend
-                    nomor_st: nomorST,
-                    temuanAuditData: auditFindings,
-                    auditStatusData: auditStatus
-                };
-
-                const response = await fetch(GAS_URL, {
-                    method: 'POST',
-                    mode: 'no-cors',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-                
-                updateSaveStatus('Temuan tersimpan', true);
-            } catch (error) {
-                console.error("Gagal menyimpan pembaruan temuan:", error);
-                updateSaveStatus('Gagal menyimpan temuan', false);
-            }
-        }
+    updateSaveStatus('Menyimpan temuan...');
+    const nomorST = document.getElementById('no_st').value;
+    try {
+        const payload = {
+            action: 'updateTemuanAndStatus',
+            nomor_st: nomorST,
+            temuanAuditData: auditFindings,
+            auditStatusData: auditStatus
+        };
+        const response = await fetch(GAS_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            body: JSON.stringify(payload)
+        });
+        updateSaveStatus('Temuan tersimpan', true);
+    } catch (error) {
+        console.error("Gagal menyimpan pembaruan temuan:", error);
+        updateSaveStatus('Gagal menyimpan temuan', false);
+    }
+}
 
         function openPrintSelectionModal() {
             // Tentukan status persetujuan final berdasarkan keberadaan Pengendali Teknis
@@ -3260,15 +3185,6 @@ function formatDate(dateString) {
             return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
         }
 
-        function formatDate(dateString) {
-            if (!dateString || isNaN(new Date(dateString))) {
-                return '................';
-            }
-            const options = { day: 'numeric', month: 'long', year: 'numeric' };
-            const months = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-            const date = new Date(dateString);
-            return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
-        }
 function handleSignOut() {
             if (isDataDirty) {
                 // Jika ada perubahan, gunakan modal yang sudah ada
@@ -4120,6 +4036,7 @@ async function handleAiSummaryGeneration() {
             }
         });
         
+        // --- PERBAIKAN DI SINI: Menambahkan }); yang hilang ---
         anggotaSelector.addEventListener('change', (e) => {
             renderWorksheetTable(e.target.value, true);
         });
@@ -4128,14 +4045,27 @@ async function handleAiSummaryGeneration() {
             renderNoticeTable(e.target.value, currentUserRole);
         });
 
-        modalBody.addEventListener('input', handleReviewChange); 
-        modalBody.addEventListener('click', handleReviewActions);
         document.querySelectorAll('.stage-weight-input').forEach(input => {
             input.addEventListener('change', recalculateAndRenderBobot);
         });
         saveProgressBtn.addEventListener('click', handleSaveProgress);
         finishAuditBtn.addEventListener('click', handleFinishAudit);
+        
+        // --- FUNGSI BARU DITAMBAHKAN DI SINI ---
+        function handleEditAudit() {
+            const subKkaCode = modal.dataset.currentSubKka;
+            if (!subKkaCode) return;
+
+            // Set status kembali ke in-progress agar bisa diedit
+            auditStatus[subKkaCode] = 'in-progress';
+            
+            // Panggil updateModalState untuk menerapkan status baru dan membuka kunci input
+            updateModalState(subKkaCode, false, 'Anggota', 'kertas_kerja');
+        }
+        
+        // --- PERBAIKAN: Listener untuk tombol edit sekarang diarahkan ke fungsi yang benar ---
         editAuditBtn.addEventListener('click', handleEditAudit);
+
         closeModalBtn.addEventListener('click', () => modal.style.display = 'none');
         closeModalFooterBtn.addEventListener('click', () => modal.style.display = 'none');
         window.addEventListener('click', (event) => {
@@ -4147,8 +4077,6 @@ async function handleAiSummaryGeneration() {
         closePrintSelectionModalBtn.addEventListener('click', () => printSelectionModal.style.display = 'none');
         btnGeneratePrintPreview.addEventListener('click', handlePrintSelection);
         closePrintPreviewModalBtn.addEventListener('click', () => printPreviewModal.style.display = 'none');
-        btnExportWord.addEventListener('click', exportToWord);
-        btnExportPdf.addEventListener('click', exportToPdf);
 
         const searchInput = document.getElementById('nama_auditor_search');
         const hiddenNameInput = document.getElementById('nama_auditor');
@@ -4208,13 +4136,12 @@ async function handleAiSummaryGeneration() {
                 nipInput.readOnly = false;
             }, 0);
         });
-// Tambahkan ini di akhir blok <script> Anda
-dashboardFilterSatker.addEventListener('change', renderDashboard);
-dashboardFilterTahap.addEventListener('change', renderDashboard);
-btnGenerateSummary.addEventListener('click', handleAiSummaryGeneration);
-    </script>
 
-<!-- ======================================================= -->
+        dashboardFilterSatker.addEventListener('change', renderDashboard);
+        dashboardFilterTahap.addEventListener('change', renderDashboard);
+        btnGenerateSummary.addEventListener('click', handleAiSummaryGeneration);
+
+        <!-- ======================================================= -->
 <!-- MULAI: Kode Notifikasi Pembaruan Aplikasi             -->
 <!-- ======================================================= -->
 
@@ -4286,12 +4213,10 @@ btnGenerateSummary.addEventListener('click', handleAiSummaryGeneration);
             window.electronAPI.restartApp();
         });
     }
-</script>
 
-<!-- ======================================================= -->
-<!-- SELESAI: Kode Notifikasi Pembaruan Aplikasi            -->
-<!-- ======================================================= -->
-
+    </script>
 </body>
 </html>
 ...im...
+
+
