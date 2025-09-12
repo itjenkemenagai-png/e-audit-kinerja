@@ -1079,7 +1079,7 @@
 
     <script>
         // --- KONFIGURASI ---
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbxiLojZ1jmE-iKPaqHQGUeMKhGtvXpm0B80EY19PBWomsLUUhDuojBfNI8FO7kHFbNe/exec";
+        const GAS_URL = "https://script.google.com/macros/s/AKfycbxIyH8CIC7XwipeDwiQYt3CsqO_bfWWwnN6FbWu7ON9PZ9ewcEr8Sx1JeqszETXmLMG/exec";
 
         // --- STATE APLIKASI ---
         // Tambahkan di bawah // --- STATE APLIKASI ---
@@ -2715,19 +2715,24 @@ function saveAuditData(subKkaCode) {
     async function handleSaveProgress() {
         const subKkaCode = modal.dataset.currentSubKka;
         const findingsData = saveAuditData(subKkaCode);
+        const nomorST = document.getElementById('no_st').value;
+
         if (findingsData) {
             auditStatus[subKkaCode] = 'in-progress';
             
-            // Kirim pembaruan granular
+            // Perintah 1: Simpan data temuan
             await sendGranularUpdate({
-                updateType: 'finding',
+                action: 'updateSingleFinding',
+                nomor_st: nomorST,
                 subKka: subKkaCode,
-                data: findingsData
+                findingObject: findingsData
             });
+            // Perintah 2: Simpan status pekerjaan
             await sendGranularUpdate({
-                updateType: 'status',
+                action: 'updateSingleWorkStatus',
+                nomor_st: nomorST,
                 subKka: subKkaCode,
-                data: { workStatus: 'in-progress' }
+                status: 'in-progress'
             });
 
             if (currentUserRole === 'Anggota') {
@@ -2744,6 +2749,7 @@ function saveAuditData(subKkaCode) {
         const subKkaCode = modal.dataset.currentSubKka;
         const nilaiSkorInput = document.getElementById('nilai_skor');
         const errorElement = document.getElementById('modal-error');
+        const nomorST = document.getElementById('no_st').value;
 
         errorElement.textContent = '';
         if (nilaiSkorInput.value.trim() === '') {
@@ -2756,25 +2762,26 @@ function saveAuditData(subKkaCode) {
         if (findingsData) {
             auditStatus[subKkaCode] = 'completed';
             const currentStatus = reviewApprovalStatus[subKkaCode];
-            let reviewStatusReset = null;
+            let shouldResetReview = false;
             if(currentStatus === 'perbaikan_ketua' || currentStatus === 'perbaikan_teknis') {
                 reviewApprovalStatus[subKkaCode] = 'belum_direviu';
-                reviewStatusReset = 'belum_direviu';
+                shouldResetReview = true;
             }
             
-            // Kirim pembaruan granular
+            // Perintah 1: Simpan data temuan
             await sendGranularUpdate({
-                updateType: 'finding',
+                action: 'updateSingleFinding',
+                nomor_st: nomorST,
                 subKka: subKkaCode,
-                data: findingsData
+                findingObject: findingsData
             });
+            // Perintah 2: Simpan status pekerjaan
             await sendGranularUpdate({
-                updateType: 'status',
+                action: 'updateSingleWorkStatus',
+                nomor_st: nomorST,
                 subKka: subKkaCode,
-                data: { 
-                    workStatus: 'completed', 
-                    reviewStatus: reviewStatusReset // Kirim null jika tidak ada reset
-                }
+                status: 'completed',
+                resetReview: shouldResetReview
             });
 
             if (currentUserRole === 'Anggota') {
@@ -2872,7 +2879,6 @@ function saveAuditData(subKkaCode) {
     async function sendGranularUpdate(payload) {
         updateSaveStatus('Menyimpan...');
         try {
-            // Perubahan: Menggunakan payload secara langsung tanpa membungkusnya lagi
             const response = await fetch(GAS_URL, {
                 method: 'POST',
                 mode: 'no-cors',
@@ -4498,29 +4504,25 @@ async function handleAiSummaryGeneration() {
 
     if (window.electronAPI) {
     
-        // Saat pengecekan dimulai
         window.electronAPI.onUpdateChecking(() => {
             notificationTitle.textContent = 'Memeriksa Pembaruan';
             notificationMessage.textContent = 'Menghubungi server untuk memeriksa versi terbaru...';
-            restartButton.style.display = 'none'; // Sembunyikan tombol restart
+            restartButton.style.display = 'none';
             closeButton.textContent = 'Tutup';
             notification.style.display = 'flex';
         });
 
-        // Saat tidak ada pembaruan ditemukan
         window.electronAPI.onUpdateNotAvailable(() => {
             notificationTitle.textContent = 'Tidak Ada Pembaruan';
             notificationMessage.textContent = 'Anda sudah menggunakan versi aplikasi yang terbaru.';
             restartButton.style.display = 'none';
             closeButton.textContent = 'OK';
             notification.style.display = 'flex';
-            // Sembunyikan notifikasi setelah 3 detik
             setTimeout(() => {
                 notification.style.display = 'none';
             }, 3000);
         });
         
-        // Saat pembaruan ditemukan dan sedang diunduh
         window.electronAPI.onUpdateAvailable(() => {
             notificationTitle.textContent = 'Pembaruan Ditemukan';
             notificationMessage.textContent = 'Mengunduh versi baru di latar belakang. Anda akan diberi tahu jika sudah selesai.';
@@ -4529,16 +4531,14 @@ async function handleAiSummaryGeneration() {
             notification.style.display = 'flex';
         });
 
-        // Saat pembaruan telah selesai diunduh
         window.electronAPI.onUpdateDownloaded(() => {
             notificationTitle.textContent = 'Pembaruan Siap Diinstal';
             notificationMessage.textContent = 'Versi baru telah diunduh. Mulai ulang aplikasi untuk menerapkan pembaruan.';
-            restartButton.style.display = 'inline-flex'; // Tampilkan kembali tombol restart
+            restartButton.style.display = 'inline-flex';
             closeButton.textContent = 'Nanti';
             notification.style.display = 'flex';
         });
 
-        // Saat terjadi error
         window.electronAPI.onUpdateError((error) => {
             notificationTitle.textContent = 'Gagal Memperbarui';
             notificationMessage.textContent = 'Terjadi kesalahan saat memeriksa pembaruan. Silakan periksa koneksi internet Anda.';
@@ -4548,7 +4548,6 @@ async function handleAiSummaryGeneration() {
             console.error('Update error:', error);
         });
 
-        // Logika untuk tombol
         closeButton.addEventListener('click', () => {
             notification.style.display = 'none';
         });
@@ -4557,8 +4556,7 @@ async function handleAiSummaryGeneration() {
             window.electronAPI.restartApp();
         });
     }
-
-    </script>
+</script>
 </body>
 </html>
 ...im...

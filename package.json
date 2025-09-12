@@ -1,6 +1,6 @@
 {
   "name": "e-audit-kinerja",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Aplikasi E-Audit Kinerja Desktop untuk Itjen Kemenag",
   "main": "main.js",
   "scripts": {
@@ -11,6 +11,7 @@
   "author": "Inspektorat Jenderal Kemenag",
   "license": "ISC",
   "dependencies": {
+    "electron-log": "^5.4.3",
     "electron-updater": "^6.1.7"
   },
   "devDependencies": {
